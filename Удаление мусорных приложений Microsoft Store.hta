@@ -3,8 +3,8 @@
 <head>
 <meta http-equiv="X-UA-Compatible" content="IE=9">
 <meta charset="utf-8">
-<!-- Короткая версия в заголовке окна -->
-<title>Удаление приложений MS v 1.0.0b</title>
+<!-- Обновленная версия в заголовке окна -->
+<title>Удаление приложений MS v 1.0.1b</title>
 
 <HTA:APPLICATION 
     ID="App" 
@@ -14,7 +14,7 @@
     SINGLEINSTANCE="yes" 
     SYSMENU="yes" 
     SCROLL="no"
-    APPLICATIONNAME="Удаление приложений MS v 1.0.0b"/>
+    APPLICATIONNAME="Удаление приложений MS v 1.0.1b"/>
 
 <style>
     * { box-sizing: border-box; }
@@ -36,7 +36,6 @@
         position: relative;
     }
     
-    /* Основной заголовок */
     h2 { 
         margin: 0 0 2px 0; 
         font-size: 16px; 
@@ -45,12 +44,11 @@
         text-align: center; 
     }
     
-    /* Подзаголовок с ником */
     .author {
         text-align: center;
         font-size: 12px;
         font-weight: 600;
-        color: #e8453c; /* Красный цвет */
+        color: #e8453c;
         margin-bottom: 14px;
     }
     
@@ -204,12 +202,15 @@ Sub Window_OnLoad
               "Microsoft.Getstarted" & vbCrLf & _
               "Microsoft.Microsoft3DViewer" & vbCrLf & _
               "Microsoft.MixedReality.Portal" & vbCrLf & _
-              "Microsoft.OutlookForWindows"
+              "Microsoft.OutlookForWindows" & vbCrLf & _
+              "Microsoft.BingSearch" & vbCrLf & _
+              "MicrosoftCorporationII.QuickAssist"
 
     ' === 3. Получение списка установленных ===
     Dim tmpFile, fullCmd, installedList
     tmpFile = shell.ExpandEnvironmentStrings("%TEMP%") & "\appx_list_" & Replace(Timer, ",", "") & ".txt"
-    fullCmd = "cmd /c powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -NoProfile -Command ""Get-AppxPackage -AllUsers | Select-Object -ExpandProperty Name | Out-File -FilePath '" & tmpFile & "' -Encoding Unicode -Width 1000"""
+    
+    fullCmd = "cmd /c powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -NoProfile -Command ""Get-AppxPackage -AllUsers | Where-Object {$_.Status -eq 'Ok'} | Select-Object -ExpandProperty Name | Out-File -FilePath '" & tmpFile & "' -Encoding Unicode -Width 1000"""
     shell.Run fullCmd, 0, True
 
     installedList = ""
@@ -218,7 +219,7 @@ Sub Window_OnLoad
         Set stream = CreateObject("ADODB.Stream")
         stream.Type = 2 : stream.Charset = "unicode" 
         stream.Open : stream.LoadFromFile tmpFile
-        installedList = stream.ReadText
+        installedList = LCase(stream.ReadText)
         stream.Close : Set stream = Nothing
         fso.DeleteFile tmpFile
     End If
@@ -226,25 +227,36 @@ Sub Window_OnLoad
     ' === 4. Разбор и фильтрация ===
     appCount = 0
     ReDim appList(0)
-    Dim lines, i, line
+    Dim lines, i, line, searchStr
     lines = Split(rawList, vbCrLf)
 
     For i = 0 To UBound(lines)
         line = Trim(lines(i))
         If line <> "" Then
-            If InStr(line, "\") > 0 Then line = Mid(line, InStrRev(line, "\") + 1)
-            If InStr(line, "_") > 0 Then line = Left(line, InStr(line, "_") - 1)
+            searchStr = line
+            If InStr(searchStr, "\") > 0 Then searchStr = Mid(searchStr, InStrRev(searchStr, "\") + 1)
+            If InStr(searchStr, "_") > 0 Then searchStr = Left(searchStr, InStr(searchStr, "_") - 1)
             
-            If InStr(LCase(installedList), LCase(line)) > 0 Then
+            Dim isFound : isFound = False
+            Dim arrInstalled : arrInstalled = Split(installedList, vbCrLf)
+            Dim j
+            For j = 0 To UBound(arrInstalled)
+                If Trim(arrInstalled(j)) = LCase(searchStr) Then
+                    isFound = True
+                    Exit For
+                End If
+            Next
+            
+            If isFound Then
                 Dim isDup : isDup = False
                 Dim k
                 For k = 0 To appCount - 1
-                    If LCase(appList(k)) = LCase(line) Then isDup = True
+                    If LCase(appList(k)) = LCase(searchStr) Then isDup = True
                 Next
                 
                 If Not isDup Then
                     ReDim Preserve appList(appCount)
-                    appList(appCount) = line
+                    appList(appCount) = searchStr
                     appCount = appCount + 1
                 End If
             End If
@@ -252,7 +264,7 @@ Sub Window_OnLoad
     Next
 
     ' === 5. Формирование вывода ===
-    Dim html, j, msgHtml
+    Dim html, j2, msgHtml
     
     msgHtml = ""
     If isAfterUninstall Then
@@ -276,9 +288,9 @@ Sub Window_OnLoad
     html = html & "<label class=""check-item check-all"">"
     html = html & "<input type=""checkbox"" id=""chkAll""> Выбрать все (" & appCount & " шт.)</label>"
     
-    For j = 0 To appCount - 1
+    For j2 = 0 To appCount - 1
         html = html & "<label class=""check-item"">"
-        html = html & "<input type=""checkbox"" class=""chkApp"" value=""" & appList(j) & """> " & appList(j) & "</label>"
+        html = html & "<input type=""checkbox"" class=""chkApp"" value=""" & appList(j2) & """> " & appList(j2) & "</label>"
     Next
     document.getElementById("appListContainer").innerHTML = html
 
@@ -323,19 +335,55 @@ Sub DoUninstall
 
     psContent = "Write-Host 'Начинаем удаление...' -ForegroundColor Cyan" & vbCrLf
     psContent = psContent & "Write-Host ''" & vbCrLf
+    psContent = psContent & "$stuckPackages = @()" & vbCrLf
     
+    ' === ЭТАП 1: Стандартное удаление ===
     For k = 0 To UBound(pkgArray)
-        psContent = psContent & "Write-Host 'Удаляем: " & pkgArray(k) & "' -ForegroundColor Yellow" & vbCrLf
+        psContent = psContent & "Write-Host '>>> Обработка: " & pkgArray(k) & "' -ForegroundColor Yellow" & vbCrLf
         
-        ' 1. Удаление для текущего пользователя (помогает обойти защиту системных пакетов)
         psContent = psContent & "Get-AppxPackage -Name '" & pkgArray(k) & "' | Remove-AppxPackage -ErrorAction SilentlyContinue" & vbCrLf
+        psContent = psContent & "Get-AppxPackage -Name '" & pkgArray(k) & "' -AllUsers | ForEach-Object { Remove-AppxPackage -Package $_.PackageFullName -ErrorAction SilentlyContinue }" & vbCrLf
+        psContent = psContent & "Get-AppxProvisionedPackage -Online | Where-Object {$_.DisplayName -Like '*" & pkgArray(k) & "*'} | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue" & vbCrLf
         
-        ' 2. Удаление для всех пользователей (без параметра -AllUsers в Get-AppxPackage, чтобы не было конфликта)
-        psContent = psContent & "Get-AppxPackage -Name '" & pkgArray(k) & "' -AllUsers | Remove-AppxPackage -ErrorAction SilentlyContinue" & vbCrLf
-        
-        ' 3. Удаление заготовки (Provisioned) — чтобы система не восстановила пакет
-        psContent = psContent & "Get-AppxProvisionedPackage -Online | Where-Object {$_.DisplayName -eq '" & pkgArray(k) & "'} | Remove-AppxProvisionedPackage -Online 2>$null" & vbCrLf
+        ' Проверка и winget
+        psContent = psContent & "if (Get-AppxPackage -AllUsers -Name '" & pkgArray(k) & "') {" & vbCrLf
+        psContent = psContent & "    Write-Host '    Пакет остался. Применяем winget...' -ForegroundColor Magenta" & vbCrLf
+        psContent = psContent & "    winget uninstall --id '" & pkgArray(k) & "' --silent --accept-source-agreements" & vbCrLf
+        psContent = psContent & "    if (Get-AppxPackage -AllUsers -Name '" & pkgArray(k) & "') {" & vbCrLf
+        psContent = psContent & "        Write-Host '    Пакет ВСЁ ЕЩЁ не удалён! (Защищён системой)' -ForegroundColor Red" & vbCrLf
+        psContent = psContent & "        $stuckPackages += '" & pkgArray(k) & "'" & vbCrLf
+        psContent = psContent & "    } else {" & vbCrLf
+        psContent = psContent & "        Write-Host '    Успешно удалено через winget!' -ForegroundColor Green" & vbCrLf
+        psContent = psContent & "    }" & vbCrLf
+        psContent = psContent & "} else {" & vbCrLf
+        psContent = psContent & "    Write-Host '    Успешно удалено стандартными методами.' -ForegroundColor Green" & vbCrLf
+        psContent = psContent & "}" & vbCrLf
     Next
+    
+    ' === ЭТАП 2: Применение EndOfLife для "застрявших" ===
+    psContent = psContent & "Write-Host ''" & vbCrLf
+    psContent = psContent & "if ($stuckPackages.Count -gt 0) {" & vbCrLf
+    psContent = psContent & "    Write-Host '=== ПРИМЕНЕНИЕ МЕТОДА EndOfLife для защищённых пакетов ===' -ForegroundColor Cyan" & vbCrLf
+    psContent = psContent & "    $sid = (Get-LocalUser $Env:UserName).Sid.Value" & vbCrLf
+    psContent = psContent & "    foreach ($pkg in $stuckPackages) {" & vbCrLf
+    psContent = psContent & "        Write-Host '>>> Попытка EndOfLife: ' $pkg -ForegroundColor Yellow" & vbCrLf
+    psContent = psContent & "        $pkgObj = Get-AppxPackage -AllUsers -Name $pkg" & vbCrLf
+    psContent = psContent & "        if ($pkgObj) {" & vbCrLf
+    psContent = psContent & "            $fullName = $pkgObj.PackageFullName" & vbCrLf
+    psContent = psContent & "            $regPath = ""HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Appx\AppxAllUserStore\EndOfLife\$sid\$fullName""" & vbCrLf
+    psContent = psContent & "            New-Item -Path $regPath -Force | Out-Null" & vbCrLf
+    psContent = psContent & "            Get-AppxPackage -AllUsers -Name $pkg | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue" & vbCrLf
+    psContent = psContent & "            Remove-Item -Path $regPath -Recurse -Force -ErrorAction SilentlyContinue" & vbCrLf
+    psContent = psContent & "            if (Get-AppxPackage -AllUsers -Name $pkg) {" & vbCrLf
+    psContent = psContent & "                Write-Host '    ВСЁ РАВНО НЕ УДАЛЁН! (Полностью защищён)' -ForegroundColor Red" & vbCrLf
+    psContent = psContent & "            } else {" & vbCrLf
+    psContent = psContent & "                Write-Host '    Успешно удалён через EndOfLife!' -ForegroundColor Green" & vbCrLf
+    psContent = psContent & "            }" & vbCrLf
+    psContent = psContent & "        }" & vbCrLf
+    psContent = psContent & "    }" & vbCrLf
+    psContent = psContent & "} else {" & vbCrLf
+    psContent = psContent & "    Write-Host 'Все пакеты удалены стандартными методами.' -ForegroundColor Green" & vbCrLf
+    psContent = psContent & "}" & vbCrLf
     
     psContent = psContent & "Write-Host ''" & vbCrLf
     psContent = psContent & "Write-Host 'Готово! Перезапускаем HTA для проверки...' -ForegroundColor Green" & vbCrLf
@@ -360,7 +408,6 @@ window.setTimeout "Window_OnLoad", 100, "VBScript"
 </head>
 <body>
 <div class="container">
-    <!-- Основной заголовок и ник разработчика разделены -->
     <h2>Удаление мусорных приложений Microsoft Store</h2>
     <div class="author">Asuka93sama</div>
     
