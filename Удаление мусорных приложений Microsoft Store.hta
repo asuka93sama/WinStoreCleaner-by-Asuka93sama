@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="X-UA-Compatible" content="IE=9">
+<meta charset="utf-8">
+<!-- Короткая версия в заголовке окна -->
+<title>Удаление приложений MS v 1.0.0b</title>
+
+<HTA:APPLICATION 
+    ID="App" 
+    BORDER="thin" 
+    CAPTION="yes" 
+    SHOWINTASKBAR="yes" 
+    SINGLEINSTANCE="yes" 
+    SYSMENU="yes" 
+    SCROLL="no"
+    APPLICATIONNAME="Удаление приложений MS v 1.0.0b"/>
+
+<style>
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; }
+    body { 
+        font-family: "Segoe UI", Tahoma, sans-serif; 
+        background: #eef2f7; 
+        color: #253247; 
+        padding: 12px; 
+    }
+    
+    .container {
+        width: 100%; 
+        height: 100%; 
+        background: #ffffff;
+        border: 1px solid #dce3ed; 
+        border-radius: 13px;
+        padding: 15px; 
+        position: relative;
+    }
+    
+    /* Основной заголовок */
+    h2 { 
+        margin: 0 0 2px 0; 
+        font-size: 16px; 
+        font-weight: 700; 
+        color: #243b5a; 
+        text-align: center; 
+    }
+    
+    /* Подзаголовок с ником */
+    .author {
+        text-align: center;
+        font-size: 12px;
+        font-weight: 600;
+        color: #e8453c; /* Красный цвет */
+        margin-bottom: 14px;
+    }
+    
+    .list-header {
+        font-size: 12px; 
+        color: #666; 
+        margin-bottom: 8px;
+        display: none;
+    }
+
+    .list-container {
+        width: 100%;
+        height: 540px; 
+        overflow-y: auto; 
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 10px;
+        background: #f9fbfe;
+        margin-bottom: 15px; 
+    }
+
+    .check-item {
+        display: block; 
+        margin-bottom: 8px; 
+        padding: 8px 10px;
+        background: #ffffff; 
+        border: 1px solid #e2e8f0;
+        border-radius: 8px; 
+        font-size: 13px; 
+        cursor: pointer;
+    }
+    .check-item input { 
+        margin-right: 8px; 
+        vertical-align: middle; 
+    }
+    .check-all { 
+        background: #e8f0fe; 
+        border-color: #c5d9f7; 
+        font-weight: 600; 
+        color: #1a56c4; 
+    }
+    
+    .buttons {
+        width: 100%; 
+        height: 42px;
+        position: absolute;
+        bottom: 15px;
+        left: 0;
+        padding: 0 15px;
+    }
+    button.action {
+        width: 100%; 
+        height: 42px;
+        border-radius: 8px; 
+        border: none; 
+        font-size: 13px; 
+        font-weight: 600;
+        color: white; 
+        cursor: pointer; 
+        background: #e8453c;
+    }
+    button.action:hover { background: #d0352d; }
+
+    .msg-box {
+        text-align: center;
+        padding: 20px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        margin-bottom: 15px;
+    }
+    .msg-success {
+        background: #d4edda;
+        border: 1px solid #c3e6cb;
+        color: #155724;
+    }
+    
+    .loading-text {
+        text-align: center; 
+        padding-top: 50px; 
+        color: #888; 
+        font-weight: 600;
+    }
+</style>
+
+<script language="VBScript">
+Dim fso, shell, app
+Dim appList()
+Dim appCount
+Dim isAfterUninstall
+
+Sub Window_OnLoad
+    On Error Resume Next
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    Set shell = CreateObject("WScript.Shell")
+    Set app = CreateObject("Shell.Application")
+    If Err.Number <> 0 Then
+        MsgBox "Ошибка инициализации!", 16, "Ошибка"
+        Err.Clear : Exit Sub
+    End If
+    On Error GoTo 0
+
+    ' === 1. Перезапуск от админа ===
+    Dim flagFile
+    flagFile = shell.ExpandEnvironmentStrings("%TEMP%") & "\uninstall_apps_admin_flag.txt"
+    
+    If Not fso.FileExists(flagFile) Then
+        Dim f
+        Set f = fso.CreateTextFile(flagFile, True)
+        f.Write "elevated"
+        f.Close
+
+        Dim htaPath
+        htaPath = Unescape(document.location.pathname)
+        If Left(htaPath, 1) = "/" Then htaPath = Mid(htaPath, 2)
+        htaPath = Replace(htaPath, "/", "\")
+        
+        app.ShellExecute "mshta.exe", """" & htaPath & """", "", "runas", 1
+        window.Close
+        Exit Sub
+    Else
+        fso.DeleteFile flagFile
+    End If
+
+    window.resizeTo 520, 760
+
+    Dim htaUrl
+    htaUrl = document.location.href
+    isAfterUninstall = (InStr(htaUrl, "after_uninstall") > 0)
+
+    ' === 2. Встроенный список приложений ===
+    Dim rawList
+    rawList = "Microsoft.BingWeather" & vbCrLf & _
+              "Microsoft.WindowsFeedbackHub" & vbCrLf & _
+              "Microsoft.ZuneMusic" & vbCrLf & _
+              "Clipchamp.Clipchamp" & vbCrLf & _
+              "Microsoft.GetHelp" & vbCrLf & _
+              "Microsoft.MicrosoftSolitaireCollection" & vbCrLf & _
+              "Microsoft.MicrosoftStickyNotes" & vbCrLf & _
+              "MSTeams" & vbCrLf & _
+              "Microsoft.BingNews" & vbCrLf & _
+              "Microsoft.People" & vbCrLf & _
+              "Yandex.Music" & vbCrLf & _
+              "A025C540.Yandex.Music" & vbCrLf & _
+              "Microsoft.MicrosoftOfficeHub" & vbCrLf & _
+              "Microsoft.ZuneVideo" & vbCrLf & _
+              "Microsoft.Office.OneNote" & vbCrLf & _
+              "Microsoft.SkypeApp" & vbCrLf & _
+              "Microsoft.549981C3F5F10" & vbCrLf & _
+              "Microsoft.Wallet" & vbCrLf & _
+              "Microsoft.Getstarted" & vbCrLf & _
+              "Microsoft.Microsoft3DViewer" & vbCrLf & _
+              "Microsoft.MixedReality.Portal" & vbCrLf & _
+              "Microsoft.OutlookForWindows"
+
+    ' === 3. Получение списка установленных ===
+    Dim tmpFile, fullCmd, installedList
+    tmpFile = shell.ExpandEnvironmentStrings("%TEMP%") & "\appx_list_" & Replace(Timer, ",", "") & ".txt"
+    fullCmd = "cmd /c powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -NoProfile -Command ""Get-AppxPackage -AllUsers | Select-Object -ExpandProperty Name | Out-File -FilePath '" & tmpFile & "' -Encoding Unicode -Width 1000"""
+    shell.Run fullCmd, 0, True
+
+    installedList = ""
+    If fso.FileExists(tmpFile) Then
+        Dim stream
+        Set stream = CreateObject("ADODB.Stream")
+        stream.Type = 2 : stream.Charset = "unicode" 
+        stream.Open : stream.LoadFromFile tmpFile
+        installedList = stream.ReadText
+        stream.Close : Set stream = Nothing
+        fso.DeleteFile tmpFile
+    End If
+
+    ' === 4. Разбор и фильтрация ===
+    appCount = 0
+    ReDim appList(0)
+    Dim lines, i, line
+    lines = Split(rawList, vbCrLf)
+
+    For i = 0 To UBound(lines)
+        line = Trim(lines(i))
+        If line <> "" Then
+            If InStr(line, "\") > 0 Then line = Mid(line, InStrRev(line, "\") + 1)
+            If InStr(line, "_") > 0 Then line = Left(line, InStr(line, "_") - 1)
+            
+            If InStr(LCase(installedList), LCase(line)) > 0 Then
+                Dim isDup : isDup = False
+                Dim k
+                For k = 0 To appCount - 1
+                    If LCase(appList(k)) = LCase(line) Then isDup = True
+                Next
+                
+                If Not isDup Then
+                    ReDim Preserve appList(appCount)
+                    appList(appCount) = line
+                    appCount = appCount + 1
+                End If
+            End If
+        End If
+    Next
+
+    ' === 5. Формирование вывода ===
+    Dim html, j, msgHtml
+    
+    msgHtml = ""
+    If isAfterUninstall Then
+        msgHtml = "<div class='msg-box msg-success'>Процесс удаления завершён!</div>"
+    End If
+
+    If appCount = 0 Then
+        If isAfterUninstall Then
+            document.getElementById("appListContainer").innerHTML = msgHtml & "<div class='msg-box msg-success'>Все выбранные приложения успешно удалены из системы!</div>"
+        Else
+            document.getElementById("appListContainer").innerHTML = "<div class='msg-box msg-success'>Все приложения из встроенного списка уже удалены!</div>"
+        End If
+        document.getElementById("btnUninstall").disabled = True
+        document.getElementById("btnUninstall").style.background = "#aab4c2"
+        Exit Sub
+    End If
+
+    document.getElementById("listHeader").style.display = "block"
+    
+    html = msgHtml
+    html = html & "<label class=""check-item check-all"">"
+    html = html & "<input type=""checkbox"" id=""chkAll""> Выбрать все (" & appCount & " шт.)</label>"
+    
+    For j = 0 To appCount - 1
+        html = html & "<label class=""check-item"">"
+        html = html & "<input type=""checkbox"" class=""chkApp"" value=""" & appList(j) & """> " & appList(j) & "</label>"
+    Next
+    document.getElementById("appListContainer").innerHTML = html
+
+    document.getElementById("chkAll").onclick = GetRef("ToggleAll")
+    document.getElementById("btnUninstall").onclick = GetRef("DoUninstall")
+End Sub
+
+Sub ToggleAll
+    Dim isChecked, items, i
+    isChecked = document.getElementById("chkAll").checked
+    Set items = document.getElementsByClassName("chkApp")
+    For i = 0 To items.length - 1
+        items(i).checked = isChecked
+    Next
+End Sub
+
+Sub DoUninstall
+    On Error Resume Next
+    Dim items, i, list, pkgName
+    list = ""
+    Set items = document.getElementsByClassName("chkApp")
+    For i = 0 To items.length - 1
+        If items(i).checked Then
+            pkgName = items(i).value
+            If list <> "" Then list = list & vbCrLf
+            list = list & pkgName
+        End If
+    Next
+
+    If Trim(list) = "" Then
+        MsgBox "Выберите хотя бы одно приложение.", 48, "Внимание"
+        Exit Sub
+    End If
+
+    Dim tempPs1Path, psContent, pkgArray, k, htaPath
+    tempPs1Path = shell.ExpandEnvironmentStrings("%TEMP%") & "\uninstall_apps.ps1"
+    pkgArray = Split(list, vbCrLf)
+    
+    htaPath = Unescape(document.location.pathname)
+    If Left(htaPath, 1) = "/" Then htaPath = Mid(htaPath, 2)
+    htaPath = Replace(htaPath, "/", "\")
+
+    psContent = "Write-Host 'Начинаем удаление...' -ForegroundColor Cyan" & vbCrLf
+    psContent = psContent & "Write-Host ''" & vbCrLf
+    
+    For k = 0 To UBound(pkgArray)
+        psContent = psContent & "Write-Host 'Удаляем: " & pkgArray(k) & "' -ForegroundColor Yellow" & vbCrLf
+        
+        ' 1. Удаление для текущего пользователя (помогает обойти защиту системных пакетов)
+        psContent = psContent & "Get-AppxPackage -Name '" & pkgArray(k) & "' | Remove-AppxPackage -ErrorAction SilentlyContinue" & vbCrLf
+        
+        ' 2. Удаление для всех пользователей (без параметра -AllUsers в Get-AppxPackage, чтобы не было конфликта)
+        psContent = psContent & "Get-AppxPackage -Name '" & pkgArray(k) & "' -AllUsers | Remove-AppxPackage -ErrorAction SilentlyContinue" & vbCrLf
+        
+        ' 3. Удаление заготовки (Provisioned) — чтобы система не восстановила пакет
+        psContent = psContent & "Get-AppxProvisionedPackage -Online | Where-Object {$_.DisplayName -eq '" & pkgArray(k) & "'} | Remove-AppxProvisionedPackage -Online 2>$null" & vbCrLf
+    Next
+    
+    psContent = psContent & "Write-Host ''" & vbCrLf
+    psContent = psContent & "Write-Host 'Готово! Перезапускаем HTA для проверки...' -ForegroundColor Green" & vbCrLf
+    
+    psContent = psContent & "Start-Process 'mshta.exe' -ArgumentList '""" & htaPath & """ after_uninstall'" & vbCrLf
+    psContent = psContent & "Start-Sleep -Seconds 2" & vbCrLf
+
+    Dim psStream
+    Set psStream = CreateObject("ADODB.Stream")
+    psStream.Type = 2 : psStream.Charset = "utf-8"
+    psStream.Open : psStream.WriteText psContent
+    psStream.SaveToFile tempPs1Path, 2
+    psStream.Close : Set psStream = Nothing
+
+    shell.Run "powershell.exe -ExecutionPolicy Bypass -NoProfile -File """ & tempPs1Path & """", 1, False
+
+    window.Close
+End Sub
+
+window.setTimeout "Window_OnLoad", 100, "VBScript"
+</script>
+</head>
+<body>
+<div class="container">
+    <!-- Основной заголовок и ник разработчика разделены -->
+    <h2>Удаление мусорных приложений Microsoft Store</h2>
+    <div class="author">Asuka93sama</div>
+    
+    <div id="listHeader" class="list-header">Оставшиеся приложения:</div>
+    
+    <div class="list-container" id="appListContainer">
+        <div class="loading-text">Загрузка списка приложений...</div>
+    </div>
+    
+    <div class="buttons">
+        <button class="action" id="btnUninstall">Удалить выбранное</button>
+    </div>
+</div>
+</body>
+</html>

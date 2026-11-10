@@ -1,0 +1,24 @@
+    ' === 2. Встроенный список приложений ===
+    Dim rawList
+    rawList = "Microsoft.BingWeather" & vbCrLf & _
+              "Microsoft.WindowsFeedbackHub" & vbCrLf & _
+              "Microsoft.ZuneMusic" & vbCrLf & _
+              "Clipchamp.Clipchamp" & vbCrLf & _
+              "Microsoft.GetHelp" & vbCrLf & _
+              "Microsoft.MicrosoftSolitaireCollection" & vbCrLf & _
+              "Microsoft.MicrosoftStickyNotes" & vbCrLf & _
+              "MSTeams" & vbCrLf & _
+              "Microsoft.BingNews" & vbCrLf & _
+              "Microsoft.People" & vbCrLf & _
+              "Yandex.Music" & vbCrLf & _
+              "A025C540.Yandex.Music" & vbCrLf & _
+              "Microsoft.MicrosoftOfficeHub" & vbCrLf & _
+              "Microsoft.ZuneVideo" & vbCrLf & _
+              "Microsoft.Office.OneNote" & vbCrLf & _
+              "Microsoft.SkypeApp" & vbCrLf & _
+              "Microsoft.549981C3F5F10" & vbCrLf & _
+              "Microsoft.Wallet" & vbCrLf & _
+              "Microsoft.Getstarted" & vbCrLf & _
+              "Microsoft.Microsoft3DViewer" & vbCrLf & _
+              "Microsoft.MixedReality.Portal" & vbCrLf & _
+              "Microsoft.OutlookForWindows"

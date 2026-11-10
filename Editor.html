@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Редактор списка мусорных приложений Microsoft Store</title>
+    <style>
+        body { font-family: "Segoe UI", Tahoma, sans-serif; background: #eef2f7; color: #253247; padding: 20px; margin: 0; }
+        .container { max-width: 700px; margin: 0 auto; background: #fff; border: 1px solid #dce3ed; border-radius: 13px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        
+        /* Заголовок */
+        h2 { text-align: center; color: #243b5a; margin: 0 0 2px 0; font-size: 20px; }
+        .author { text-align: center; font-size: 14px; font-weight: bold; color: #e8453c; margin-bottom: 20px; }
+        
+        .file-row { display: flex; gap: 10px; margin-bottom: 15px; }
+        .file-row input[type="text"] { flex-grow: 1; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; background: #f9fbfe; }
+        .file-row input[type="file"] { display: none; }
+        .file-row button { padding: 8px 15px; border: none; border-radius: 6px; background: #3978e8; color: white; font-weight: bold; cursor: pointer; }
+        .file-row button:hover { background: #2866d2; }
+
+        /* Скрытые по умолчанию элементы */
+        #toolbar, #saveBtn, #addRow, #importPanel, #hintBox {
+            display: none;
+        }
+
+        .toolbar { display: flex; gap: 10px; margin-bottom: 15px; }
+        .toolbar button { flex: 1; padding: 10px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; color: white; }
+        .btn-export { background: #6c757d; }
+        .btn-export:hover { background: #5a6268; }
+        .btn-import { background: #17a2b8; }
+        .btn-import:hover { background: #138496; }
+
+        /* Панель импорта */
+        .import-panel {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        .import-panel p { margin: 0 0 15px 0; font-weight: bold; color: #856404; }
+        .import-buttons { display: flex; gap: 10px; justify-content: center; }
+        .import-buttons button { padding: 8px 15px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; color: white; }
+        .btn-replace { background: #e8453c; }
+        .btn-replace:hover { background: #d0352d; }
+        .btn-add { background: #279b63; }
+        .btn-add:hover { background: #1e7a4c; }
+        .btn-cancel { background: #6c757d; }
+        .btn-cancel:hover { background: #5a6268; }
+
+        .list-container { border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; background: #f9fbfe; min-height: 200px; max-height: 400px; overflow-y: auto; margin-bottom: 15px; }
+        
+        .app-item { display: flex; justify-content: space-between; align-items: center; background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 12px; margin-bottom: 8px; font-size: 14px; }
+        .app-item span { word-break: break-all; }
+        .btn-del { color: #e8453c; font-weight: bold; font-size: 18px; cursor: pointer; border: none; background: none; padding: 0 5px; line-height: 1; }
+        .btn-del:hover { color: #d0352d; }
+
+        .add-row { display: flex; gap: 10px; margin-bottom: 15px; }
+        .add-row input { flex-grow: 1; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 13px; }
+        .add-row button { padding: 8px 15px; border: none; border-radius: 6px; background: #279b63; color: white; font-weight: bold; cursor: pointer; }
+        .add-row button:hover { background: #1e7a4c; }
+
+        .save-btn { width: 100%; padding: 12px; border: none; border-radius: 8px; background: #e8453c; color: white; font-size: 15px; font-weight: bold; cursor: pointer; }
+        .save-btn:hover { background: #d0352d; }
+
+        .status { text-align: center; margin-bottom: 10px; font-size: 13px; color: #279b63; font-weight: bold; display: none; }
+
+        /* Блок с подсказкой */
+        .hint-box {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f7df6a; /* Желтый цвет, как на рисунке */
+            border: 1px solid #e0c751;
+            border-radius: 6px;
+            font-size: 13px;
+            color: #333;
+            line-height: 1.5;
+        }
+        .hint-box code {
+            background: rgba(255, 255, 255, 0.5);
+            padding: 2px 5px;
+            border-radius: 3px;
+            font-family: monospace;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2>Редактор списка мусорных приложений Microsoft Store</h2>
+    <div class="author">Asuka93sama</div>
+    
+    <div class="file-row">
+        <input type="text" id="filePath" placeholder="Выберите файл HTA..." readonly>
+        <input type="file" id="fileInput" accept=".hta,.html,.txt" onchange="handleFileSelect(event)">
+        <button onclick="document.getElementById('fileInput').click()">Обзор...</button>
+    </div>
+
+    <div class="toolbar" id="toolbar">
+        <button class="btn-export" onclick="exportList()">Экспорт списка</button>
+        <input type="file" id="importInput" accept=".txt" onchange="previewImport(event)" style="display:none;">
+        <button class="btn-import" onclick="document.getElementById('importInput').click()">Импорт списка</button>
+    </div>
+
+    <div class="import-panel" id="importPanel">
+        <p id="importText">Найдено приложений: 0. Что сделать?</p>
+        <div class="import-buttons">
+            <button class="btn-replace" onclick="applyImport('replace')">Очистить и заполнить</button>
+            <button class="btn-add" onclick="applyImport('add')">Добавить отсутствующие</button>
+            <button class="btn-cancel" onclick="cancelImport()">Отмена</button>
+        </div>
+    </div>
+
+    <div class="status" id="statusMsg">Файл загружен!</div>
+
+    <div class="list-container" id="appList">
+        <div style="text-align: center; color: #888; padding-top: 80px;">Сначала выберите файл</div>
+    </div>
+
+    <div class="add-row" id="addRow">
+        <input type="text" id="txtAdd" placeholder="C:\Program Files\WindowsApps\Microsoft...">
+        <button onclick="addApp()">Добавить</button>
+    </div>
+
+    <button class="save-btn" id="saveBtn" onclick="saveChanges()">Сохранить изменения</button>
+
+    <!-- Желтый блок с подсказкой -->
+    <div class="hint-box" id="hintBox">
+        <b>Подсказка:</b> Вставляйте полные пути до приложений, например: <code>C:\Program Files\WindowsApps\Microsoft...</code><br>
+        Удобно их найти с помощью приложения <b>Uninstall Tool</b> на вкладке <b>Microsoft Apps</b> или любым удобным для вас способом.
+    </div>
+</div>
+
+<script>
+    let fileContent = "";
+    let apps = [];
+    let originalFileName = "edited_app.hta";
+    let pendingImportApps = [];
+
+    function handleFileSelect(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        originalFileName = file.name;
+        document.getElementById('filePath').value = file.name;
+        
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            fileContent = e.target.result;
+            
+            if (fileContent.indexOf('Dim rawList') === -1) {
+                alert("Ошибка: В выбранном файле не найден блок 'Dim rawList'. Выберите корректный HTA-файл.");
+                resetUI();
+                return;
+            }
+
+            // Показываем все скрытые элементы
+            document.getElementById('toolbar').style.display = "flex";
+            document.getElementById('addRow').style.display = "flex";
+            document.getElementById('saveBtn').style.display = "block";
+            document.getElementById('statusMsg').style.display = "block";
+            document.getElementById('hintBox').style.display = "block";
+            document.getElementById('importPanel').style.display = "none";
+
+            parseApps();
+            renderList();
+        };
+        reader.readAsText(file, 'UTF-8');
+    }
+
+    function resetUI() {
+        document.getElementById('filePath').value = "";
+        document.getElementById('toolbar').style.display = "none";
+        document.getElementById('addRow').style.display = "none";
+        document.getElementById('saveBtn').style.display = "none";
+        document.getElementById('statusMsg').style.display = "none";
+        document.getElementById('importPanel').style.display = "none";
+        document.getElementById('hintBox').style.display = "none";
+        document.getElementById('appList').innerHTML = '<div style="text-align: center; color: #888; padding-top: 80px;">Сначала выберите файл</div>';
+    }
+
+    function parseApps() {
+        const startIndex = fileContent.indexOf('Dim rawList');
+        const rawListText = fileContent.substring(startIndex);
+        const lines = rawListText.split('\n');
+        
+        let blockLines = [];
+        let isReading = false;
+
+        for (let line of lines) {
+            if (line.includes('rawList =')) {
+                isReading = true;
+            }
+            if (isReading) {
+                blockLines.push(line);
+                if (!line.trim().endsWith('_') && blockLines.length > 1) {
+                    break;
+                }
+            }
+        }
+
+        apps = [];
+        const regex = /"([^"]+)"/g;
+        const fullBlock = blockLines.join('\n');
+        let match;
+        while ((match = regex.exec(fullBlock)) !== null) {
+            apps.push(match[1]);
+        }
+    }
+
+    function renderList() {
+        const container = document.getElementById('appList');
+        if (apps.length === 0) {
+            container.innerHTML = '<div style="text-align: center; color: #888; padding-top: 80px;">Список пуст</div>';
+            return;
+        }
+
+        container.innerHTML = '';
+        apps.forEach((app, index) => {
+            const div = document.createElement('div');
+            div.className = 'app-item';
+            div.innerHTML = `
+                <span>${app}</span>
+                <button class="btn-del" onclick="removeApp(${index})" title="Удалить">✖</button>
+            `;
+            container.appendChild(div);
+        });
+    }
+
+    function removeApp(index) {
+        apps.splice(index, 1);
+        renderList();
+    }
+
+    function addApp() {
+        const input = document.getElementById('txtAdd');
+        let val = input.value.trim();
+        if (!val) return;
+
+        if (val.includes('\\')) val = val.split('\\').pop();
+        if (val.includes('_')) val = val.split('_')[0];
+
+        if (apps.includes(val)) {
+            alert("Это приложение уже есть в списке!");
+            return;
+        }
+
+        apps.push(val);
+        input.value = '';
+        renderList();
+    }
+
+    function saveChanges() {
+        if (!fileContent) {
+            alert("Сначала выберите файл!");
+            return;
+        }
+
+        let newBlock = '    Dim rawList\n';
+        newBlock += '    rawList = ';
+        
+        apps.forEach((app, index) => {
+            newBlock += `"${app}"`;
+            if (index < apps.length - 1) {
+                newBlock += ' & vbCrLf & _\n              ';
+            }
+        });
+        newBlock += '\n';
+
+        const startIndex = fileContent.indexOf('    Dim rawList');
+        const endMarker = "' === 3.";
+        const endIndex = fileContent.indexOf(endMarker, startIndex);
+
+        const newContent = fileContent.substring(0, startIndex) + newBlock + '\n' + fileContent.substring(endIndex);
+
+        const blob = new Blob([newContent], { type: 'text/html;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = originalFileName;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    function exportList() {
+        if (apps.length === 0) {
+            alert("Список пуст, нечего экспортировать!");
+            return;
+        }
+
+        let txtContent = "    ' === 2. Встроенный список приложений ===\n";
+        txtContent += "    Dim rawList\n";
+        txtContent += "    rawList = ";
+        
+        apps.forEach((app, index) => {
+            txtContent += `"${app}"`;
+            if (index < apps.length - 1) {
+                txtContent += ' & vbCrLf & _\n              ';
+            }
+        });
+        txtContent += '\n';
+
+        const blob = new Blob([txtContent], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'apps_list_export.txt';
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+
+    function previewImport(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const content = e.target.result;
+            const regex = /"([^"]+)"/g;
+            let match;
+            pendingImportApps = [];
+            
+            while ((match = regex.exec(content)) !== null) {
+                pendingImportApps.push(match[1]);
+            }
+
+            if (pendingImportApps.length === 0) {
+                alert("В файле не найдены приложения в кавычках!");
+                document.getElementById('importInput').value = "";
+                return;
+            }
+
+            document.getElementById('importText').innerHTML = `Найдено приложений: <b>${pendingImportApps.length}</b>. Что сделать?`;
+            document.getElementById('importPanel').style.display = "block";
+            
+            document.getElementById('importInput').value = "";
+        };
+        reader.readAsText(file, 'UTF-8');
+    }
+
+    function applyImport(action) {
+        if (action === 'replace') {
+            apps = [...pendingImportApps];
+        } else if (action === 'add') {
+            pendingImportApps.forEach(app => {
+                if (!apps.includes(app)) {
+                    apps.push(app);
+                }
+            });
+        }
+
+        renderList();
+        document.getElementById('importPanel').style.display = "none";
+        pendingImportApps = [];
+        alert("Импорт успешно применен!");
+    }
+
+    function cancelImport() {
+        document.getElementById('importPanel').style.display = "none";
+        pendingImportApps = [];
+    }
+</script>
+</body>
+</html>
