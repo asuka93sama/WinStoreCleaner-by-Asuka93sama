@@ -1,0 +1,1 @@
+# WinStoreCleaner-by-Asuka93sama
