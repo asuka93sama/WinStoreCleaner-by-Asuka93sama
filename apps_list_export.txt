@@ -21,4 +21,6 @@
               "Microsoft.Getstarted" & vbCrLf & _
               "Microsoft.Microsoft3DViewer" & vbCrLf & _
               "Microsoft.MixedReality.Portal" & vbCrLf & _
-              "Microsoft.OutlookForWindows"
+              "Microsoft.OutlookForWindows" & vbCrLf & _
+              "Microsoft.BingSearch" & vbCrLf & _
+              "MicrosoftCorporationII.QuickAssist"
